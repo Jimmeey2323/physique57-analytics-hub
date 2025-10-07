@@ -35,9 +35,9 @@ export interface SessionData {
 }
 
 const GOOGLE_CONFIG = {
-  CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-  CLIENT_SECRET: import.meta.env.VITE_GOOGLE_CLIENT_SECRET,
-  REFRESH_TOKEN: import.meta.env.VITE_GOOGLE_REFRESH_TOKEN,
+  CLIENT_ID: "416630995185-007ermh3iidknbbtdmu5vct207mdlbaa.apps.googleusercontent.com",
+  CLIENT_SECRET: "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",
+  REFRESH_TOKEN: "1//04w4V2xMUIMzACgYIARAAGAQSNwF-L9Ir5__pXDmZVYaHKOSqyauTDVmTvrCvgaL2beep4gmp8_lVED0ppM9BPWDDimHyQKk50EY",
   TOKEN_URL: "https://oauth2.googleapis.com/token"
 };
 
