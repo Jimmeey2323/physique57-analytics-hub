@@ -1,0 +1,385 @@
+import React, { useState, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Home, Download, TrendingUp, Users, UserCheck, Calendar, Percent, Filter, CheckCircle, Zap, Calendar as CalendarIcon, X, BarChart3, DollarSign, Target, Clock, Trophy, Star, Award, Activity, Sparkles, Play, Pause } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+interface MetricData {
+  label: string;
+  value: string;
+  location: string;
+  change?: number;
+  trend?: 'strong' | 'moderate' | 'weak';
+}
+export interface ModernHeroSectionProps {
+  title: string;
+  subtitle: string;
+  variant: 'sales' | 'client' | 'trainer' | 'sessions' | 'discounts' | 'funnel' | 'attendance' | 'powercycle' | 'expiration' | 'cancellations' | 'summary';
+  onExport?: () => void;
+  showHomeButton?: boolean;
+  metrics?: MetricData[];
+  exportButton?: React.ReactNode;
+  location?: string; // Add location prop for audio selection
+  compact?: boolean; // Add compact mode for shorter hero section
+}
+const gradientVariants = {
+  sales: 'from-slate-900 via-blue-900 to-slate-800',
+  client: 'from-gray-900 via-blue-900 to-gray-800',
+  trainer: 'from-zinc-900 via-indigo-900 to-zinc-800',
+  sessions: 'from-neutral-900 via-orange-900 to-neutral-800',
+  discounts: 'from-stone-900 via-amber-900 to-stone-800',
+  funnel: 'from-slate-900 via-violet-900 to-slate-800',
+  attendance: 'from-gray-900 via-emerald-900 to-gray-800',
+  powercycle: 'from-zinc-900 via-cyan-900 to-zinc-800',
+  expiration: 'from-neutral-900 via-red-900 to-neutral-800',
+  cancellations: 'from-stone-900 via-rose-900 to-stone-800',
+  summary: 'from-slate-900 via-teal-900 to-slate-800'
+};
+const iconVariants = {
+  sales: [TrendingUp, DollarSign, BarChart3, Target],
+  client: [Users, UserCheck, Award, Star],
+  trainer: [UserCheck, Trophy, Activity, Award],
+  sessions: [Calendar, Clock, CalendarIcon, CheckCircle],
+  discounts: [Percent, Star, Target, Sparkles],
+  funnel: [Filter, Target, TrendingUp, BarChart3],
+  attendance: [CheckCircle, Users, Activity, Calendar],
+  powercycle: [Zap, Activity, TrendingUp, Target],
+  expiration: [Clock, CalendarIcon, Target, Star],
+  cancellations: [X, Calendar, Clock, Target],
+  summary: [BarChart3, TrendingUp, Award, Star]
+};
+const FloatingIcon: React.FC<{
+  Icon: React.ComponentType<any>;
+  className: string;
+  delay?: number;
+}> = ({
+  Icon,
+  className,
+  delay = 0
+}) => <div className={`absolute ${className} animate-float opacity-20 hover:opacity-40 transition-opacity duration-300`} style={{
+  animationDelay: `${delay}s`
+}}>
+    <Icon className="w-full h-full text-white drop-shadow-lg" />
+  </div>;
+const AnimatedFloatingElements: React.FC<{
+  variant: string;
+}> = ({
+  variant
+}) => {
+  const icons = iconVariants[variant as keyof typeof iconVariants] || iconVariants.summary;
+  return <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* Primary floating icons */}
+      <FloatingIcon Icon={icons[0]} className="top-10 left-10 w-16 h-16" delay={0} />
+      <FloatingIcon Icon={icons[1]} className="top-32 right-20 w-12 h-12" delay={0.5} />
+      <FloatingIcon Icon={icons[2]} className="bottom-20 left-32 w-20 h-20" delay={1} />
+      <FloatingIcon Icon={icons[3]} className="bottom-32 right-1/3 w-14 h-14" delay={1.5} />
+      
+      {/* Secondary floating icons */}
+      <FloatingIcon Icon={icons[0]} className="top-1/2 left-1/4 w-10 h-10" delay={0.8} />
+      <FloatingIcon Icon={icons[1]} className="top-20 right-1/2 w-8 h-8" delay={1.2} />
+      <FloatingIcon Icon={icons[2]} className="top-3/4 right-1/4 w-6 h-6" delay={0.3} />
+      <FloatingIcon Icon={icons[3]} className="bottom-1/2 left-1/6 w-8 h-8" delay={1.8} />
+      
+      {/* Tertiary floating elements */}
+      <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-white/30 rounded-full animate-pulse" style={{
+      animationDelay: '0.5s'
+    }}></div>
+      <div className="absolute top-1/3 right-1/5 w-2 h-2 bg-white/40 rounded-full animate-ping" style={{
+      animationDelay: '1s'
+    }}></div>
+      <div className="absolute bottom-1/4 left-1/2 w-4 h-4 bg-white/20 rounded-full animate-bounce" style={{
+      animationDelay: '1.5s'
+    }}></div>
+      <div className="absolute top-2/3 right-2/3 w-2 h-2 bg-white/50 rounded-full animate-pulse" style={{
+      animationDelay: '2s'
+    }}></div>
+      <div className="absolute bottom-1/6 right-1/6 w-3 h-3 bg-white/30 rounded-full animate-ping" style={{
+      animationDelay: '0.2s'
+    }}></div>
+      
+      {/* Grid pattern overlay */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="h-full w-full bg-grid-white/[0.05] [mask-image:radial-gradient(ellipse_at_center,white,transparent_75%)]" />
+      </div>
+    </div>;
+};
+export const ModernHeroSection: React.FC<ModernHeroSectionProps> = ({
+  title,
+  subtitle,
+  variant,
+  onExport,
+  showHomeButton = true,
+  metrics = [],
+  exportButton,
+  location,
+  compact = false
+}) => {
+  const navigate = useNavigate();
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  const handlePlayAudio = async () => {
+    if (!audioRef.current) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      setAudioError(null);
+      
+      // Select audio source based on variant and location
+      const audioSrc = (variant === 'sales' || (variant === 'summary' && location === 'Kwality House'))
+        ? '/kwality-house-audio.mp3' 
+        : '/placeholder-audio.mp3';
+      
+      console.log('Attempting to play audio:', audioSrc);
+      console.log('Current audio element:', audioRef.current);
+      
+      // Set the source
+      audioRef.current.src = audioSrc;
+      
+      // Reset the audio element
+      audioRef.current.load();
+      
+      // Set volume to ensure it's audible
+      audioRef.current.volume = 0.8;
+      
+      // Try to play
+      const playPromise = audioRef.current.play();
+      
+      if (playPromise !== undefined) {
+        await playPromise;
+        setIsPlaying(true);
+        console.log('Audio started playing successfully');
+      }
+    } catch (error: any) {
+      console.error('Failed to play audio:', error);
+      let errorMessage = 'Failed to play audio.';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Audio playback was blocked by browser. Please enable autoplay or try again.';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = 'Audio format not supported by your browser.';
+      } else if (error.name === 'AbortError') {
+        errorMessage = 'Audio playback was aborted.';
+      }
+      
+      setAudioError(errorMessage);
+      setTimeout(() => setAudioError(null), 5000); // Clear error after 5 seconds
+    }
+  };
+  return <div className={cn(
+    "relative overflow-hidden bg-gradient-to-br text-white",
+    gradientVariants[variant],
+    compact ? "min-h-[420px]" : "min-h-[588px]"
+  )}>
+      {/* Hidden audio element */}
+      <audio 
+        ref={audioRef} 
+        onEnded={() => {
+          console.log('Audio ended');
+          setIsPlaying(false);
+        }}
+        onError={(e) => {
+          console.error('Audio element error:', e);
+          setAudioError('Audio file could not be loaded');
+          setIsPlaying(false);
+        }}
+        onLoadStart={() => console.log('Audio load started')}
+        onCanPlay={() => console.log('Audio can play')}
+        onPlay={() => console.log('Audio play event')}
+        onPause={() => console.log('Audio pause event')}
+        preload="metadata"
+        controls={false}
+      >
+        {/* Multiple source formats for better compatibility */}
+        <source src="/kwality-house-audio.mp3" type="audio/mpeg" />
+        <source src="/placeholder-audio.mp3" type="audio/mpeg" />
+        Your browser does not support the audio element.
+      </audio>
+      {/* Background overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/20" />
+      
+      {/* Animated floating elements */}
+      <AnimatedFloatingElements variant={variant} />
+      
+      {/* Corner buttons - More compact layout */}
+      <div className="absolute top-4 left-4 z-20">
+        {showHomeButton && <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => navigate('/')} 
+            className="text-white/90 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 transition-all duration-300 hover:scale-105"
+          >
+            <Home className="w-4 h-4 mr-2" />
+            Dashboard
+          </Button>}
+      </div>
+      
+      <div className="absolute top-4 right-4 z-20 flex gap-2">
+        {/* Audio Play Button */}
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={handlePlayAudio} 
+          className={cn(
+            "text-white/90 hover:text-white backdrop-blur-sm border transition-all duration-300 hover:scale-105",
+            "bg-white/10 hover:bg-white/20 border-white/20",
+            audioError && "border-red-400/50 bg-red-500/10"
+          )}
+        >
+          {isPlaying ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+          {isPlaying ? 'Pause' : 'Play'}
+        </Button>
+        
+        {exportButton || (onExport && <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onExport} 
+            className="text-white/90 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 transition-all duration-300 hover:scale-105"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>)}
+      </div>
+      
+      {/* Error message */}
+      {audioError && (
+        <div className="absolute top-16 right-4 z-20 bg-red-500/20 text-white text-xs px-3 py-2 rounded-lg backdrop-blur-sm border border-red-400/30 max-w-xs">
+          {audioError}
+        </div>
+      )}
+      
+      {/* Content */}
+      <div className={cn(
+        "relative z-10 flex items-center justify-center px-6",
+        compact ? "min-h-[420px] py-8" : "min-h-[588px] py-12"
+      )}>
+        <div className="text-center max-w-7xl mx-auto w-full">
+          <h1 className={cn(
+            "font-black mb-4 animate-fade-in bg-gradient-to-r from-white via-white to-white/90 bg-clip-text text-transparent drop-shadow-2xl tracking-tight",
+            compact ? "text-5xl md:text-7xl" : "text-4xl md:text-6xl"
+          )}>
+            {title}
+          </h1>
+          <p className={cn(
+            "text-white/95 animate-slide-up delay-200 max-w-3xl mx-auto leading-relaxed font-medium",
+            compact ? "text-xl md:text-2xl mb-8" : "text-lg md:text-xl mb-8"
+          )}>
+            {subtitle}
+          </p>
+          
+          {/* Metrics Display - Enhanced 3-metric layout with better animations */}
+          {metrics.length > 0 && (
+            <div className={cn("max-w-6xl mx-auto", compact ? "mt-8" : "mt-10")}>
+              {/* 3-metric premium layout with advanced animations */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {metrics.slice(0, 3).map((metric, index) => {
+                  const isCenter = index === 1;
+                  const change = metric.change || 0;
+                  const isPositive = change > 0;
+                  
+                  return (
+                    <div
+                      key={index}
+                      className={cn(
+                        "group relative rounded-2xl p-6 border transition-all duration-700 ease-out",
+                        "bg-white/5 backdrop-blur-xl",
+                        "hover:bg-white/10",
+                        "shadow-[0_8px_32px_rgba(0,0,0,0.2)] hover:shadow-[0_16px_48px_rgba(0,0,0,0.3)]",
+                        "hover:scale-105 hover:-translate-y-2",
+                        "animate-fade-in cursor-pointer",
+                        "overflow-hidden",
+                        isCenter 
+                          ? "border-white/30 bg-white/10 md:scale-105 ring-1 ring-white/20"
+                          : "border-white/15 hover:border-white/30"
+                      )}
+                      style={{
+                        animationDelay: `${index * 200}ms`,
+                        animationFillMode: 'both'
+                      }}
+                    >
+                      {/* Animated gradient border accent */}
+                      <div className={cn(
+                        "absolute inset-x-0 top-0 h-1 rounded-t-2xl transition-all duration-700",
+                        "bg-gradient-to-r from-blue-400/30 via-cyan-400/50 to-blue-400/30",
+                        "group-hover:from-blue-300/50 group-hover:via-cyan-300/70 group-hover:to-blue-300/50",
+                        "group-hover:h-1.5"
+                      )} />
+                      
+                      {/* Floating glow effect */}
+                      <div className="absolute -inset-1 bg-gradient-to-r from-blue-500/10 via-cyan-500/10 to-purple-500/10 rounded-2xl opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-700 -z-10" />
+                      
+                      {/* Content container */}
+                      <div className="relative z-10 space-y-3">
+                        {/* Label with fade-in animation */}
+                        <div className="flex items-center justify-between">
+                          <div className={cn(
+                            "text-[10px] uppercase tracking-widest font-bold transition-all duration-500",
+                            "text-white/70 group-hover:text-white/90 group-hover:tracking-[0.2em]"
+                          )}>
+                            {metric.location}
+                          </div>
+                          
+                          {/* Change indicator badge */}
+                          {change !== 0 && (
+                            <div className={cn(
+                              "flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold",
+                              "backdrop-blur-sm transition-all duration-500",
+                              "group-hover:scale-110",
+                              isPositive 
+                                ? "bg-emerald-500/15 text-emerald-200 border border-emerald-400/20" 
+                                : "bg-red-500/15 text-red-200 border border-red-400/20"
+                            )}>
+                              <span>{isPositive ? '↑' : '↓'}</span>
+                              <span>{Math.abs(change).toFixed(1)}%</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Value with scale animation */}
+                        <div className={cn(
+                          "font-black text-white drop-shadow-2xl transition-all duration-700",
+                          "group-hover:scale-105 group-hover:drop-shadow-[0_0_20px_rgba(255,255,255,0.2)]",
+                          isCenter ? "text-4xl" : "text-3xl"
+                        )}>
+                          {metric.value}
+                        </div>
+                        
+                        {/* Description with slide animation */}
+                        <div className={cn(
+                          "text-xs text-white/80 font-medium leading-relaxed",
+                          "group-hover:text-white/95 transition-all duration-500"
+                        )}>
+                          {metric.label}
+                        </div>
+                        
+                        {/* Decorative shimmer line */}
+                        <div className="h-px bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:via-white/40 transition-all duration-700" />
+                      </div>
+                      
+                      {/* Animated pulse for center card */}
+                      {isCenter && (
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/5 to-transparent animate-pulse pointer-events-none" 
+                          style={{ animationDuration: '4s' }} 
+                        />
+                      )}
+                      
+                      {/* Corner accent */}
+                      <div className="absolute top-2 right-2 w-16 h-16 bg-gradient-to-br from-white/5 to-transparent rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Bottom gradient fade */}
+      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/40 to-transparent" />
+    </div>;
+};

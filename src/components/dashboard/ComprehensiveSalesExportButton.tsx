@@ -1,0 +1,510 @@
+import React, { useState, useMemo, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Download, FileSpreadsheet, Loader2, TrendingUp } from 'lucide-react';
+import { SalesData, YearOnYearMetricType } from '@/types/dashboard';
+import { formatCurrency, formatNumber, formatPercentage } from '@/utils/formatters';
+
+interface TableExportData {
+  name: string;
+  headers: string[];
+  rows: string[][];
+}
+
+interface ComprehensiveSalesExportButtonProps {
+  data: SalesData[];
+  currentLocation: string;
+  locationName: string;
+  // Refs to table components to extract their processed data
+  yearOnYearTableRef?: React.RefObject<any>;
+  monthOnMonthTableRef?: React.RefObject<any>;
+  productPerformanceTableRef?: React.RefObject<any>;
+  categoryPerformanceTableRef?: React.RefObject<any>;
+  soldByTableRef?: React.RefObject<any>;
+  paymentMethodTableRef?: React.RefObject<any>;
+}
+
+interface ExportConfig {
+  currentView: boolean;
+  monthOnMonth: boolean;
+  yearOnYear: boolean;
+  productPerformance: boolean;
+  categoryPerformance: boolean;
+  soldByAnalysis: boolean;
+  paymentMethodAnalysis: boolean;
+  allTabs: boolean;
+}
+
+const LOCATION_MAPPING: Record<string, string> = {
+  'all': 'All Locations',
+  'kwality': 'Kwality House, Kemps Corner',
+  'supreme': 'Supreme HQ, Bandra',
+  'kenkere': 'Kenkere House'
+};
+
+export const ComprehensiveSalesExportButton: React.FC<ComprehensiveSalesExportButtonProps> = ({
+  data,
+  currentLocation,
+  locationName
+}) => {
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportConfig, setExportConfig] = useState<ExportConfig>({
+    currentView: true,
+    monthOnMonth: false,
+    yearOnYear: false,
+    productPerformance: false,
+    categoryPerformance: false,
+    soldByAnalysis: false,
+    paymentMethodAnalysis: false,
+    allTabs: false
+  });
+
+  // Get current tab information
+  const getCurrentTabInfo = () => {
+    const activeTab = document.querySelector('[role="tab"][data-state="active"]');
+    const tabValue = activeTab?.getAttribute('data-value') || 'current-view';
+    const tabText = activeTab?.textContent?.trim() || 'Current View';
+    return { tabValue, tabText };
+  };
+
+  // Extract table data from DOM elements
+  const extractTableData = (tableSelector: string, tableName: string): TableExportData | null => {
+    const tableElements = document.querySelectorAll(tableSelector);
+    if (tableElements.length === 0) {
+      console.warn(`No tables found: ${tableSelector}`);
+      return null;
+    }
+
+    // Use the first visible table or the largest table if multiple found
+    let tableElement = tableElements[0] as HTMLTableElement;
+    if (tableElements.length > 1) {
+      // Find the table with most rows (likely the main data table)
+      let maxRows = 0;
+      tableElements.forEach(table => {
+        const rowCount = table.querySelectorAll('tr').length;
+        if (rowCount > maxRows) {
+          maxRows = rowCount;
+          tableElement = table as HTMLTableElement;
+        }
+      });
+    }
+
+    const headers: string[] = [];
+    const rows: string[][] = [];
+
+    // Extract headers - look for thead first, then first tr, then th elements anywhere
+    let headerRow = tableElement.querySelector('thead tr');
+    if (!headerRow) {
+      headerRow = tableElement.querySelector('tr:has(th)');
+    }
+    if (!headerRow) {
+      headerRow = tableElement.querySelector('tr');
+    }
+
+    if (headerRow) {
+      const headerCells = headerRow.querySelectorAll('th, td');
+      headerCells.forEach(cell => {
+        // Get text content and clean it up
+        let text = cell.textContent?.trim() || '';
+        // Remove any arrow indicators or sorting symbols
+        text = text.replace(/[↑↓▲▼]/g, '').trim();
+        headers.push(text);
+      });
+    }
+
+    // Extract data rows - skip header row if it exists
+    const allRows = tableElement.querySelectorAll('tr');
+    allRows.forEach((row, index) => {
+      // Skip header row
+      if (headerRow && row === headerRow) return;
+      
+      const cells = row.querySelectorAll('td, th');
+      if (cells.length === 0) return;
+      
+      const rowData: string[] = [];
+      cells.forEach(cell => {
+        // Get text content and clean it up
+        let text = cell.textContent?.trim() || '';
+        // Handle special cases like buttons, badges, etc.
+        if (cell.querySelector('button')) {
+          const buttonText = cell.querySelector('button')?.textContent?.trim();
+          text = buttonText || text;
+        }
+        // Clean up currency and number formatting
+        text = text.replace(/[↑↓▲▼]/g, '').trim();
+        rowData.push(text);
+      });
+      
+      // Only add rows that have actual data
+      if (rowData.some(cell => cell.length > 0 && cell !== '—' && cell !== '-')) {
+        rows.push(rowData);
+      }
+    });
+
+    return {
+      name: tableName,
+      headers,
+      rows
+    };
+  };
+
+  // Extract data from visible tables
+  const extractAllTableData = (): TableExportData[] => {
+    const tables: TableExportData[] = [];
+    
+    // Get the currently active tab content
+    const activeTabContent = document.querySelector('[role="tabpanel"][data-state="active"], [data-state="active"]');
+    if (!activeTabContent) {
+      console.warn('No active tab content found');
+      return tables;
+    }
+
+    // Look for different types of table structures
+    const tableQueries = [
+      // Standard HTML tables
+      { selector: 'table', name: 'Main Data Table' },
+      // Card-based layouts that might contain tabular data
+      { selector: '[class*="table"], [class*="grid"]', name: 'Grid Layout Data' },
+      // Specific component tables
+      { selector: '[class*="Table"], [class*="DataTable"]', name: 'Component Table' }
+    ];
+
+    let tableCount = 0;
+    tableQueries.forEach(({ selector, name }) => {
+      // Search within active tab content
+      const fullSelector = selector;
+      const tablesInActive = activeTabContent.querySelectorAll(fullSelector);
+      
+      tablesInActive.forEach((tableEl, index) => {
+        if (tableEl instanceof HTMLElement) {
+          const tableName = tablesInActive.length > 1 ? `${name} ${index + 1}` : name;
+          
+          // Check if this element contains tabular data
+          const rows = tableEl.querySelectorAll('tr');
+          if (rows.length > 0) {
+            const tableData = extractTableData(`[data-state="active"] ${selector}`, tableName);
+            if (tableData && tableData.rows.length > 0) {
+              tableCount++;
+              tableData.name = `${tableName} (${tableCount})`;
+              tables.push(tableData);
+            }
+          }
+        }
+      });
+    });
+
+    // If no standard tables found, try to extract from card/div based layouts
+    if (tables.length === 0) {
+      const cardLayouts = activeTabContent.querySelectorAll('[class*="card"], [class*="row"], .grid');
+      cardLayouts.forEach((layout, index) => {
+        if (layout instanceof HTMLElement) {
+          const textContent = layout.textContent?.trim();
+          if (textContent && textContent.length > 50) { // Has substantial content
+            // Try to parse as table-like structure
+            const lines = textContent.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            if (lines.length > 2) { // At least header + some data
+              tables.push({
+                name: `Card Layout Data ${index + 1}`,
+                headers: [lines[0]], // First line as header
+                rows: lines.slice(1).map(line => [line]) // Rest as single-column data
+              });
+            }
+          }
+        }
+      });
+    }
+
+    return tables;
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      const locationSuffix = currentLocation === 'all' ? 'All-Locations' : LOCATION_MAPPING[currentLocation] || currentLocation;
+      
+      // Extract data from currently visible tables
+      const tableData = extractAllTableData();
+      
+      if (tableData.length === 0) {
+        alert('No table data found to export. Please ensure tables are loaded and visible.');
+        return;
+      }
+
+      // Export each table as a separate CSV file
+      for (const table of tableData) {
+        let csvContent = '';
+        
+        // Add headers
+        if (table.headers.length > 0) {
+          csvContent += table.headers.join(',') + '\n';
+        }
+        
+        // Add rows
+        table.rows.forEach(row => {
+          csvContent += row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',') + '\n';
+        });
+
+        // Create and download file
+        const fileName = `${table.name.replace(/\s+/g, '-')}-${locationSuffix}-${timestamp}.csv`;
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Add small delay between downloads
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      // Also export all tabs if the user wants comprehensive data
+      if (exportConfig.yearOnYear || exportConfig.monthOnMonth || exportConfig.productPerformance || 
+          exportConfig.categoryPerformance || exportConfig.soldByAnalysis || exportConfig.paymentMethodAnalysis) {
+        
+        await exportAllTabsData(locationSuffix, timestamp);
+      }
+
+      setIsDialogOpen(false);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportAllTabsData = async (locationSuffix: string, timestamp: string) => {
+    const tabTriggers = document.querySelectorAll('[role="tab"]');
+    const originalActiveTab = document.querySelector('[role="tab"][data-state="active"]');
+    
+    // Create a mapping of export config to tab values
+    const tabMapping: Record<keyof ExportConfig, string[]> = {
+      currentView: [],
+      monthOnMonth: ['monthOnMonth', 'month-on-month'],
+      yearOnYear: ['yearOnYear', 'year-on-year'],
+      productPerformance: ['productPerformance', 'product-performance'],
+      categoryPerformance: ['categoryPerformance', 'category-performance'],
+      soldByAnalysis: ['soldByAnalysis', 'sold-by', 'soldBy'],
+      paymentMethodAnalysis: ['paymentMethodAnalysis', 'payment-method', 'paymentMethod'],
+      allTabs: []
+    };
+    
+    for (const trigger of tabTriggers) {
+      if (trigger instanceof HTMLElement) {
+        const tabValue = trigger.getAttribute('data-value') || trigger.textContent?.trim()?.replace(/\s+/g, '-').toLowerCase() || 'unknown';
+        
+        // Determine if this tab should be exported
+        let shouldExport = exportConfig.allTabs;
+        
+        if (!shouldExport) {
+          for (const [configKey, configValue] of Object.entries(exportConfig)) {
+            if (configValue && configKey !== 'currentView' && configKey !== 'allTabs') {
+              const mappedValues = tabMapping[configKey as keyof ExportConfig] || [];
+              if (mappedValues.some(mapped => 
+                tabValue.includes(mapped) || 
+                mapped.includes(tabValue) ||
+                tabValue.toLowerCase().includes(mapped.toLowerCase())
+              )) {
+                shouldExport = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!shouldExport) continue;
+
+        console.log(`Exporting tab: ${tabValue}`);
+        
+        // Click the tab to make it active
+        trigger.click();
+        
+        // Wait for the tab content to load and any animations to complete
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // Extract table data from this tab
+        const tabTableData = extractAllTableData();
+        
+        if (tabTableData.length === 0) {
+          console.warn(`No table data found in tab: ${tabValue}`);
+          continue;
+        }
+        
+        // Export data from this tab
+        for (const table of tabTableData) {
+          let csvContent = '';
+          
+          // Add metadata header
+          csvContent += `# Sales Analytics Export\n`;
+          csvContent += `# Tab: ${tabValue}\n`;
+          csvContent += `# Location: ${locationSuffix}\n`;
+          csvContent += `# Export Time: ${new Date().toLocaleString()}\n`;
+          csvContent += `# Table: ${table.name}\n\n`;
+          
+          // Add headers
+          if (table.headers.length > 0) {
+            csvContent += table.headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+          }
+          
+          // Add rows
+          table.rows.forEach(row => {
+            csvContent += row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',') + '\n';
+          });
+
+          // Create and download file
+          const cleanTabValue = tabValue.replace(/[^a-zA-Z0-9\-]/g, '-');
+          const cleanTableName = table.name.replace(/[^a-zA-Z0-9\-\s]/g, '').replace(/\s+/g, '-');
+          const fileName = `${cleanTabValue}-${cleanTableName}-${locationSuffix}-${timestamp}.csv`;
+          
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          const url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', fileName);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Add delay between downloads
+          await new Promise(resolve => setTimeout(resolve, 400));
+        }
+      }
+    }
+    
+    // Return to the original active tab
+    if (originalActiveTab instanceof HTMLElement) {
+      originalActiveTab.click();
+      // Wait for tab to become active again
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+  };
+
+  const toggleExportSection = (section: keyof ExportConfig) => {
+    setExportConfig(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  return (
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-2">
+          <Download className="h-4 w-4" />
+          Export All Sales Data
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Comprehensive Sales Export
+          </DialogTitle>
+          <DialogDescription>
+            Export all sales analytics tables and metrics for {locationName}. 
+            Each metric will be exported as separate CSV files for detailed analysis.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-6">
+          {/* Export Sections */}
+          <div>
+            <Label className="text-sm font-medium">Export Options</Label>
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              {Object.entries(exportConfig).map(([key, value]) => {
+                const labelMap: Record<keyof ExportConfig, string> = {
+                  currentView: 'Current View Only',
+                  monthOnMonth: 'Month-on-Month Tab',
+                  yearOnYear: 'Year-on-Year Tab',
+                  productPerformance: 'Product Performance Tab',
+                  categoryPerformance: 'Category Performance Tab',
+                  soldByAnalysis: 'Sold By Analysis Tab',
+                  paymentMethodAnalysis: 'Payment Methods Tab',
+                  allTabs: 'All Tabs (Comprehensive)'
+                };
+                
+                return (
+                  <div key={key} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={key}
+                      checked={value}
+                      onCheckedChange={() => toggleExportSection(key as keyof ExportConfig)}
+                    />
+                    <Label htmlFor={key} className="text-sm">
+                      {labelMap[key as keyof ExportConfig] || key}
+                    </Label>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Current View Info */}
+          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+            <h4 className="font-medium text-green-900 mb-2">Current View</h4>
+            <p className="text-sm text-green-700">
+              Active Tab: <span className="font-medium">{(() => {
+                const { tabText } = getCurrentTabInfo();
+                return tabText;
+              })()}</span><br/>
+              Location: <span className="font-medium">{locationName}</span><br/>
+              Data Source: <span className="font-medium">Live table data as displayed in UI</span>
+            </p>
+          </div>
+
+          {/* Export Summary */}
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <h4 className="font-medium text-blue-900 mb-2">Export Summary</h4>
+            <p className="text-sm text-blue-700">
+              {exportConfig.currentView && (
+                <>Current view will be exported as displayed.<br/></>
+              )}
+              {(exportConfig.allTabs || Object.entries(exportConfig).filter(([key, value]) => 
+                key !== 'currentView' && key !== 'allTabs' && value
+              ).length > 0) && (
+                <>Additional tabs will be exported by switching between them.<br/></>
+              )}
+              Export format: <span className="font-medium">CSV files</span>
+            </p>
+          </div>
+
+          <div className="flex justify-end space-x-3">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsDialogOpen(false)}
+              disabled={isExporting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleExport}
+              disabled={isExporting}
+              className="gap-2"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Export CSV Files
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
