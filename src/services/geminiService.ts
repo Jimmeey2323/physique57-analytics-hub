@@ -29,13 +29,20 @@ class GeminiService {
   private model: any;
 
   constructor() {
-    const apiKey = 'AIzaSyCy9Z3Sa8KJYY4n9haAmc7QGGaTEE5X0PI';
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyCy9Z3Sa8KJYY4n9haAmc7QGGaTEE5X0PI';
     if (!apiKey) {
       throw new Error('Gemini API key is not configured');
     }
     
     this.genAI = new GoogleGenerativeAI(apiKey);
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    this.model = this.genAI.getGenerativeModel({ 
+      model: "gemini-flash-latest",
+      generationConfig: {
+        temperature: 0.7,
+        topP: 0.9,
+        maxOutputTokens: 2048,
+      }
+    });
   }
 
   /**
