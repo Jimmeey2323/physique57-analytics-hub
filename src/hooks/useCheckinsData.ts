@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 
 const GOOGLE_CONFIG = {
-  CLIENT_ID: "416630995185-007ermh3iidknbbtdmu5vct207mdlbaa.apps.googleusercontent.com",
-  CLIENT_SECRET: "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",
-  REFRESH_TOKEN: "1//04w4V2xMUIMzACgYIARAAGAQSNwF-L9Ir5__pXDmZVYaHKOSqyauTDVmTvrCvgaL2beep4gmp8_lVED0ppM9BPWDDimHyQKk50EY",
+  CLIENT_ID: "416630995185-g7b0fm679lb4p45p5lou070cqscaalaf.apps.googleusercontent.com",
+  CLIENT_SECRET: "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",
+  REFRESH_TOKEN: "1//04yfYtJTsGbluCgYIARAAGAQSNwF-L9Ir3g0kqAfdV7MLUcncxyc5-U0rp2T4rjHmGaxLUF3PZy7VX8wdumM8_ABdltAqXTsC6sk",
   TOKEN_URL: "https://oauth2.googleapis.com/token"
 };
 
